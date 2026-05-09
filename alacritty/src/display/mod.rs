@@ -45,6 +45,7 @@ use crate::config::window::StartupMode;
 use crate::display::bell::VisualBell;
 use crate::display::color::{List, Rgb};
 use crate::display::content::{RenderableContent, RenderableCursor};
+use crate::display::cursor::CursorRects;
 use crate::display::cursor::IntoRects;
 use crate::display::damage::{DamageTracker, damage_y_to_viewport_y};
 use crate::display::hint::{HintMatch, HintState};
@@ -397,6 +398,12 @@ pub struct Display {
 
     glyph_cache: GlyphCache,
     meter: Meter,
+
+    // Old cursor
+    cursor_rects: Option<CursorRects>,
+
+    pub cursor_moving: bool,
+    last_frame_cursor_start: Instant,
 }
 
 impl Display {
@@ -539,6 +546,9 @@ impl Display {
             cursor_hidden: Default::default(),
             meter: Default::default(),
             ime: Default::default(),
+            cursor_rects: None,
+            cursor_moving: true,
+            last_frame_cursor_start: Instant::now(),
         })
     }
 
@@ -804,8 +814,15 @@ impl Display {
         match terminal.damage() {
             TermDamage::Full => self.damage_tracker.frame().mark_fully_damaged(),
             TermDamage::Partial(damaged_lines) => {
-                for damage in damaged_lines {
-                    self.damage_tracker.frame().damage_line(damage);
+                if config.cursor.smooth_motion
+                   && self.cursor_moving
+                   && !self.window.is_x11() {
+                    // A cheap trick for wayland
+                    self.damage_tracker.frame().mark_fully_damaged()
+                } else {
+                    for damage in damaged_lines {
+                        self.damage_tracker.frame().damage_line(damage);
+                    }
                 }
             },
         }
@@ -836,6 +853,9 @@ impl Display {
         self.make_current();
 
         self.renderer.clear(background_color, config.window_opacity());
+
+        self.renderer.start_fb();
+
         let mut lines = RenderLines::new();
 
         // Optimize loop hint comparator.
@@ -892,8 +912,39 @@ impl Display {
             self.draw_line_indicator(config, total_lines, None, display_offset);
         };
 
+        self.renderer.end_fb();
+        self.renderer.draw_fb();
+
         // Draw cursor.
-        rects.extend(cursor.rects(&size_info, config.cursor.thickness()));
+        let block_rep_shape = config.cursor.block_replace_shape().map(|x| x.shape);
+        let new_cur_rects =
+            cursor.rects(&size_info, config.cursor.thickness(), block_rep_shape);
+        if config.cursor.smooth_motion {
+            let now   = Instant::now();
+            let delta = now - self.last_frame_cursor_start;
+            // Don't count secs: we don't expect FPS < 1
+            let fps   = 1e9 / f64::from(delta.subsec_nanos());
+            self.last_frame_cursor_start = now;
+            match self.cursor_rects {
+                None => {
+                    self.cursor_moving = true;
+                    self.cursor_rects = Some(new_cur_rects);
+                },
+                Some(ref mut crcts) =>
+                    self.cursor_moving = crcts.interpolate(
+                        &new_cur_rects,
+                        fps as f32,
+                        config.cursor.smooth_motion_factor,
+                        config.cursor.smooth_motion_spring,
+                        config.cursor.smooth_motion_max_stretch_x,
+                        config.cursor.smooth_motion_max_stretch_y,
+                        self.cursor_moving
+                    ),
+            };
+        } else {
+            self.cursor_rects = Some(new_cur_rects);
+        }
+        rects.extend(self.cursor_rects.unwrap());
 
         // Push visual bell after url/underline/strikeout rects.
         let visual_bell_intensity = self.visual_bell.intensity();
@@ -933,7 +984,7 @@ impl Display {
                     let cursor_width = NonZeroU32::new(1).unwrap();
                     let cursor =
                         RenderableCursor::new(Point::new(line, column), shape, fg, cursor_width);
-                    rects.extend(cursor.rects(&size_info, config.cursor.thickness()));
+                    rects.extend(cursor.rects(&size_info, config.cursor.thickness(), block_rep_shape));
                 }
 
                 Some(Point::new(line, column))
@@ -987,7 +1038,7 @@ impl Display {
             self.damage_tracker.frame().add_viewport_rect(&size_info, x, y as i32, width, height);
 
             // Draw rectangles.
-            self.renderer.draw_rects(&size_info, &metrics, rects);
+            self.renderer.draw_rects(&size_info, &metrics, rects, background_color);
 
             // Relay messages to the user.
             let glyph_cache = &mut self.glyph_cache;
@@ -1005,7 +1056,7 @@ impl Display {
             }
         } else {
             // Draw rectangles.
-            self.renderer.draw_rects(&size_info, &metrics, rects);
+            self.renderer.draw_rects(&size_info, &metrics, rects, background_color);
         }
 
         self.draw_render_timer(config);
@@ -1024,7 +1075,7 @@ impl Display {
             let damage = self.damage_tracker.shape_frame_damage(self.size_info.into());
             let mut rects = Vec::with_capacity(damage.len());
             self.highlight_damage(&mut rects);
-            self.renderer.draw_rects(&self.size_info, &metrics, rects);
+            self.renderer.draw_rects(&self.size_info, &metrics, rects, background_color);
         }
 
         // Clearing debug highlights from the previous frame requires full redraw.
@@ -1206,7 +1257,7 @@ impl Display {
                 );
                 let cursor_point = Point::new(point.line, cursor_column);
                 let cursor = RenderableCursor::new(cursor_point, shape, fg, width);
-                rects.extend(cursor.rects(&self.size_info, config.cursor.thickness()));
+                rects.extend(cursor.rects(&self.size_info, config.cursor.thickness(), None));
                 cursor_point
             },
             _ => end,

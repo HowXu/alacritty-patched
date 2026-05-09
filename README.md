@@ -1,8 +1,63 @@
 <p align="center">
-    <img width="200" alt="Alacritty Logo" src="https://raw.githubusercontent.com/alacritty/alacritty/master/extra/logo/compat/alacritty-term%2Bscanlines.png">
+    <img width="200" alt="Alacritty Logo" src="https://raw.githubusercontent.com/GregTheMadMonk/alacritty-smooth-cursor/refs/heads/patch/readme-base/extra/logo/alacritty-term%2Bscanlines.svg">
 </p>
 
 <h1 align="center">Alacritty - A fast, cross-platform, OpenGL terminal emulator</h1>
+
+## About this fork!
+
+This fork originally introduced only the smooth cursor motion, but now also
+offers a second patch (**seltools**).
+If you are only interested in one thing, all patches are independent and could
+be built individually from __patch/...__ branches.
+
+Package in AUR (contains all available patches):
+https://aur.archlinux.org/packages/alacritty-smooth-cursor-git .
+
+This branch contains the following patches:
+
+### smooth-cursor
+
+This fork introduces basic cursor animations to Alacritty in a rather simple way.
+It replaces the block cursor render by a rectangle with a changed blend mode.
+
+<p align="center">
+    <img width="100%" alt="Alacritty smooth cursor demo" src="https://raw.githubusercontent.com/GregTheMadMonk/alacritty-smooth-cursor/refs/heads/patch/smooth-cursor/extra/demo.gif">
+</p>
+
+#### Known issues
+
+* Block cursor may look off due to manual blending implementation. It's supposed
+  to look better than it used to now, but if you still don't like it, there
+  is an option to override "block" shape
+* __Wayland compatibility is fixed!__ If you still experience issues, report
+  them to #3 and feel free to reopen it
+* Probably more resource consumption when redrawing the frame, but overall the
+  performance drawbacks should be __mostly mitigated__ by now
+* Animation speed depending on FPS is __fixed__, you might want to adjust
+  your config since, well, your FPS doesn't get factored in anymore :)
+
+#### Configure
+
+Add/change the following entries in your `alacritty.toml`:
+
+```toml
+[cursor]
+# Set to false to disable completely
+smooth_motion = true
+# 0.0 = cursor is not moving, 1.0 = cursor moves instantly
+smooth_motion_factor = 0.2
+# 0.0 = broken, 1.0 = cursor shape is unaffected by movement
+smooth_motion_spring = 0.5
+# Limits how the cursor size may change
+smooth_motion_max_stretch_x = 3.0
+smooth_motion_max_stretch_y = 3.0
+# Override "block" cursor if you don't like how it looks in this fork
+# block_replace_shape = "underline"
+```
+_Back to the original README..._
+
+<hr>
 
 <p align="center">
   <img alt="Alacritty - A fast, cross-platform, OpenGL terminal emulator"
