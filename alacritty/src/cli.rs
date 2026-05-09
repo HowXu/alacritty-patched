@@ -551,8 +551,11 @@ mod tests {
             let mut completion = String::new();
             let mut file = File::open(format!("../extra/completions/{file}")).unwrap();
             file.read_to_string(&mut completion).unwrap();
-
-            assert_eq!(generated, completion);
+            // here is some LF/CRLF bugs, in this way will fix but also tested.
+           assert_eq!(
+                generated.lines().collect::<Vec<_>>(),
+                completion.lines().collect::<Vec<_>>(),
+            );
         }
 
         // NOTE: Use this to generate new completions.
