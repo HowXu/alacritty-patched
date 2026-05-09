@@ -4,6 +4,12 @@
 
 <h1 align="center">Alacritty - A fast, cross-platform, OpenGL terminal emulator</h1>
 
+## About About this fork!
+
+This is a fork of [Alacritty](https://github.com/alacritty/alacritty), meanwhile I merged the smooth cursor feature from [alacritty-smooth-cursor](https://github.com/GregTheMadMonk/alacritty-smooth-cursor)，which has been a long time not pull from the main upstream.  
+
+Now we both have smooth cursor and some new fixes/features from the upstream.
+
 ## About this fork!
 
 This fork originally introduced only the smooth cursor motion, but now also
