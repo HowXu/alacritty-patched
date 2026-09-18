@@ -6,14 +6,14 @@ if [ $# -lt 2 ]; then
     exit 1
 fi
 
-repo="alacritty/alacritty"
+repo="${GITHUB_REPOSITORY:-alacritty/alacritty}"
 file_path=$1
 bearer=$2
 
 echo "Starting asset upload from $file_path to $repo."
 
 # Get the release for this tag.
-tag="$(git describe --tags --abbrev=0)"
+tag="${GITHUB_REF_NAME:-$(git describe --tags --abbrev=0)}"
 
 # Make sure the git tag could be determined.
 if [ -z "$tag" ]; then
